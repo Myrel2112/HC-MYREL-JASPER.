@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Headcount Operaciones — Farmatodo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --border:#e2e5ea; --text:#1c2230; --muted:#6b7280;
+    --accent:#c8102e; --accent-dark:#8f0b20; --ok:#1a8a4a; --warn:#b8860b; --bad:#c8102e;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#14161a; --card:#1d2026; --border:#2c3038; --text:#e8e9ec; --muted:#9aa0ab; }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;padding:24px 32px 60px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .subtitle{color:var(--muted);font-size:13px;margin:0 0 24px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:20px;}
+  .card h2{font-size:15px;margin:0 0 14px;}
+  .upload-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;}
+  .upload-box{border:1.5px dashed var(--border);border-radius:10px;padding:14px;text-align:center;}
+  .upload-box label{font-size:12.5px;color:var(--muted);display:block;margin-bottom:8px;font-weight:600;}
+  .upload-box input[type=file]{font-size:12px;width:100%;}
+  .upload-box .status{font-size:11.5px;margin-top:8px;color:var(--muted);}
+  .upload-box .status.ok{color:var(--ok);font-weight:600;}
+  button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+  button:hover{background:var(--accent-dark);}
+  button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);}
+  button.secondary:hover{background:var(--bg);}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;}
+  .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}
+  .stat{border-radius:10px;padding:16px;border:1px solid var(--border);}
+  .stat .label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;}
+  .stat .value{font-size:26px;font-weight:700;}
+  .stat.ideal .value{color:var(--text);}
+  .stat.ocupadas .value{color:var(--ok);}
+  .stat.vacantes .value{color:var(--warn);}
+  .stat.sobregiro .value{color:var(--bad);}
+  .stat.cobertura .value{color:var(--text);}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+  .filters label{font-size:11.5px;color:var(--muted);display:block;margin-bottom:4px;font-weight:600;}
+  select, input[type=text]{width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;}
+  table{width:100%;border-collapse:collapse;font-size:12.8px;}
+  thead th{position:sticky;top:0;background:var(--card);text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-weight:600;white-space:nowrap;cursor:pointer;}
+  tbody td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tbody tr:hover{background:var(--bg);}
+  .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+  .badge.vac{background:rgba(184,134,11,.15);color:var(--warn);}
+  .badge.sob{background:rgba(200,16,46,.15);color:var(--bad);}
+  .badge.ok{background:rgba(26,138,74,.15);color:var(--ok);}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px;}
+  .mapping-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;padding:6px 0;font-size:13px;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .footer-note{color:var(--muted);font-size:11.5px;text-align:center;margin-top:20px;}
+  .pill-toggle{display:flex;gap:6px;flex-wrap:wrap;}
+  .pill{padding:5px 11px;border-radius:999px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card);}
+  .pill.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  [hidden]{display:none!important;}
+</style>
+</head>
+<body>
+
+<h1>Dashboard de Headcount — Operaciones Farmatodo</h1>
+<p class="subtitle">Sube tus 3 archivos semanales para ver ideal, ocupadas, vacantes y sobregiro por región, área, tienda y cargo.</p>
+
+<div class="card" id="uploadCard">
+  <h2>1. Sube tus archivos</h2>
+  <div class="upload-grid">
+    <div class="upload-box">
+      <label for="fileIdeal">Estructura ideal (obligatorio)</label>
+      <input type="file" id="fileIdeal" accept=".xlsx,.xls,.csv" />
+      <div class="status" id="statusIdeal">Sin archivo</div>
+    </div>
+    <div class="upload-box">
+      <label for="fileReal">Nómina real (obligatorio)</label>
+      <input type="file" id="fileReal" accept=".xlsx,.xls,.csv" />
+      <div class="status" id="statusReal">Sin archivo</div>
+    </div>
+    <div class="upload-box">
+      <label for="fileFarm">Farmacéuticos por tienda (opcional)</label>
+      <input type="file" id="fileFarm" accept=".xlsx,.xls,.csv" />
+      <div class="status" id="statusFarm">Sin archivo</div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button id="btnProcess" disabled>Procesar y calcular</button>
+    <button class="secondary" id="btnClear">Borrar datos guardados</button>
+    <span class="hint" id="lastUpdated"></span>
+  </div>
+  <div id="mappingArea"></div>
+</div>
+
+<div id="resultsArea" hidden>
+
+  <div class="card">
+    <h2>2. Resumen general</h2>
+    <div class="summary-grid" id="summaryGrid"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Filtros</h2>
+    <div class="filters">
+      <div>
+        <label>Región</label>
+        <select id="fRegion"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label>Área</label>
+        <select id="fArea"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label>Tienda</label>
+        <select id="fTienda"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label>Cargo</label>
+        <select id="fCargo"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>Tipo de tienda</label>
+        <select id="fTipoTienda"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>Buscar</label>
+        <input type="text" id="fSearch" placeholder="tienda, cargo..." />
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="pill-toggle">
+        <div class="pill active" data-view="todos">Todos</div>
+        <div class="pill" data-view="vacantes">Solo con vacantes</div>
+        <div class="pill" data-view="sobregiro">Solo con sobregiro</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. Detalle por tienda / cargo</h2>
+    <div class="table-wrap">
+      <table id="detailTable">
+        <thead>
+          <tr>
+            <th data-k="region">Región</th>
+            <th data-k="area">Área</th>
+            <th data-k="tienda">Tienda</th>
+            <th data-k="tipoTienda">Tipo tienda</th>
+            <th data-k="cargo">Cargo</th>
+            <th data-k="ideal">Ideal</th>
+            <th data-k="ocupado">Ocupado</th>
+            <th data-k="vacante">Vacante</th>
+            <th data-k="sobregiro">Sobregiro</th>
+            <th data-k="cobertura">% Cobertura</th>
+            <th data-k="zafra">Zafra</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+    <p class="hint" id="rowCount"></p>
+  </div>
+
+</div>
+
+<div id="emptyState" class="empty-state">
+  Sube los archivos de estructura ideal y nómina real, y presiona "Procesar y calcular" para ver el panel.
+</div>
+
+<p class="footer-note">Todo el procesamiento ocurre en tu navegador — ningún archivo se envía a ningún servidor.</p>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN DE COLUMNAS ESPERADAS
+   Ajusta estos alias si tus encabezados de Excel son distintos.
+   El sistema busca, por cada campo, cualquiera de estos alias
+   (sin importar mayúsculas/acentos). Si no encuentra ninguno,
+   te pedirá que elijas manualmente la columna correcta.
+   ============================================================ */
+const FIELD_ALIASES = {
+  ideal: {
+    region:      ["region", "región"],
+    area:        ["area", "área"],
+    tienda:      ["tienda", "nombre tienda", "cod tienda", "codigo tienda"],
+    cargo:       ["cargo", "posicion", "posición", "puesto"],
+    cantidad:    ["cantidad ideal", "ideal", "hc ideal", "headcount ideal", "cantidad"],
+    tipoTienda:  ["tipo tienda", "tipo de tienda", "clasificacion tienda", "clasificación tienda"],
+    esZafra:     ["es zafra", "zafra", "temporal", "es temporal"],
+    fechaInicio: ["fecha inicio zafra", "inicio zafra", "fecha inicio", "vigencia inicio"],
+    fechaFin:    ["fecha fin zafra", "fin zafra", "fecha fin", "vigencia fin"],
+  },
+  real: {
+    region:  ["region", "región"],
+    area:    ["area", "área"],
+    tienda:  ["tienda", "nombre tienda", "cod tienda", "codigo tienda"],
+    cargo:   ["cargo", "posicion", "posición", "puesto"],
+    nombre:  ["nombre", "empleado", "nombre empleado", "colaborador"],
+  },
+  farm: {
+    tienda:        ["tienda", "nombre tienda", "cod tienda", "codigo tienda"],
+    adjunto:       ["farmaceutico adjunto", "farmacéutico adjunto", "adjunto"],
+    adjuntoTemp:   ["farmaceutico adjunto temp", "farmacéutico adjunto temp", "adjunto temp"],
+    regente:       ["regente de farmacia", "regente"],
+  }
+};
+
+// Cargos que se agrupan bajo "Farmacéutico" (corrección conocida: se cuentan juntos)
+const CARGOS_FARMACEUTICO = [
+  "farmaceutico adjunto", "farmacéutico adjunto",
+  "farmaceutico adjunto temp", "farmacéutico adjunto temp",
+  "regente de farmacia", "regente"
+];
+
+function norm(s){
+  return (s ?? "").toString().trim().toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g,"");
+}
+function isFarmCargo(cargo){
+  return CARGOS_FARMACEUTICO.includes(norm(cargo));
+}
+
+// ---------- Estado ----------
+let rawSheets = { ideal:null, real:null, farm:null };
+let mappings  = { ideal:{}, real:{}, farm:{} };
+let computedRows = [];
+let sortState = { key:null, dir:1 };
+let currentView = "todos";
+
+const STORAGE_KEY = "hc_dashboard_state_v1";
+
+// ---------- Lectura de archivos ----------
+function readFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      try{
+        const wb = XLSX.read(e.target.result, {type:"array", cellDates:true});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, {defval:""});
+        resolve(json);
+      }catch(err){ reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function detectMapping(rows, aliasSet){
+  if(!rows || !rows.length) return {};
+  const headers = Object.keys(rows[0]);
+  const normHeaders = headers.map(h=>({h, n:norm(h)}));
+  const mapping = {};
+  for(const field in aliasSet){
+    const aliases = aliasSet[field].map(norm);
+    const found = normHeaders.find(nh => aliases.includes(nh.n));
+    if(found) mapping[field] = found.h;
+  }
+  return mapping;
+}
+
+function requiredFieldsFor(kind){
+  if(kind==="ideal") return ["region","area","tienda","cargo","cantidad"];
+  if(kind==="real")  return ["region","area","tienda","cargo"];
+  if(kind==="farm")  return []; // opcional, sin campos obligatorios estrictos
+  return [];
+}
+
+function renderMappingUI(){
+  const area = document.getElementById("mappingArea");
+  area.innerHTML = "";
+  let anyMissing = false;
+
+  for(const kind of ["ideal","real","farm"]){
+    if(!rawSheets[kind]) continue;
+    const missing = requiredFieldsFor(kind).filter(f => !mappings[kind][f]);
+    if(missing.length === 0) continue;
+    anyMissing = true;
+
+    const box = document.createElement("div");
+    box.style.marginTop = "14px";
+    box.style.padding = "12px";
+    box.style.border = "1px solid var(--border)";
+    box.style.borderRadius = "10px";
+    const title = document.createElement("div");
+    title.style.fontWeight = "700";
+    title.style.fontSize = "13px";
+    title.style.marginBottom = "6px";
+    const labelMap = {ideal:"Estructura ideal", real:"Nómina real", farm:"Farmacéuticos por tienda"};
+    title.textContent = `No pude reconocer todas las columnas de "${labelMap[kind]}". Selecciónalas manualmente:`;
+    box.appendChild(title);
+
+    const headers = Object.keys(rawSheets[kind][0] || {});
+    missing.forEach(field=>{
+      const row = document.createElement("div");
+      row.className = "mapping-row";
+      const lab = document.createElement("div");
+      lab.textContent = field;
+      const sel = document.createElement("select");
+      sel.innerHTML = `<option value="">-- elegir columna --</option>` +
+        headers.map(h=>`<option value="${h}">${h}</option>`).join("");
+      sel.addEventListener("change", ()=>{ mappings[kind][field] = sel.value; validateProcessButton(); });
+      row.appendChild(lab); row.appendChild(sel);
+      box.appendChild(row);
+    });
+    area.appendChild(box);
+  }
+  return anyMissing;
+}
+
+function validateProcessButton(){
+  const idealOk = rawSheets.ideal && requiredFieldsFor("ideal").every(f=>mappings.ideal[f]);
+  const realOk  = rawSheets.real  && requiredFieldsFor("real").every(f=>mappings.real[f]);
+  document.getElementById("btnProcess").disabled = !(idealOk && realOk);
+}
+
+async function handleFile(kind, file, statusElId){
+  const statusEl = document.getElementById(statusElId);
+  if(!file){ return; }
+  statusEl.textContent = "Leyendo...";
+  statusEl.classList.remove("ok");
+  try{
+    const rows = await readFile(file);
+    rawSheets[kind] = rows;
+    mappings[kind] = detectMapping(rows, FIELD_ALIASES[kind]);
+    statusEl.textContent = `${rows.length} filas cargadas`;
+    statusEl.classList.add("ok");
+  }catch(err){
+    statusEl.textContent = "Error leyendo el archivo";
+    console.error(err);
+  }
+  renderMappingUI();
+  validateProcessButton();
+}
+
+document.getElementById("fileIdeal").addEventListener("change", e=>handleFile("ideal", e.target.files[0], "statusIdeal"));
+document.getElementById("fileReal").addEventListener("change", e=>handleFile("real", e.target.files[0], "statusReal"));
+document.getElementById("fileFarm").addEventListener("change", e=>handleFile("farm", e.target.files[0], "statusFarm"));
+
+// ---------- Cálculo ----------
+function todayInRange(start, end){
+  if(!start && !end) return true; // sin fechas, no es zafra o siempre activa
+  const now = new Date();
+  const s = start ? new Date(start) : null;
+  const e = end ? new Date(end) : null;
+  if(s && now < s) return false;
+  if(e && now > e) return false;
+  return true;
+}
+
+function esZafraTrue(val){
+  const n = norm(val);
+  return ["si","sí","true","1","yes","x"].includes(n);
+}
+
+function compute(){
+  const m = mappings;
+
+  // 1) Construir claves ideal (agrupando cargos de farmacéutico en un solo bucket "Farmacéutico")
+  const idealMap = new Map(); // key -> {region,area,tienda,cargo,tipoTienda,ideal,zafra}
+  rawSheets.ideal.forEach(r=>{
+    const region = r[m.ideal.region];
+    const area = r[m.ideal.area];
+    const tienda = r[m.ideal.tienda];
+    let cargo = r[m.ideal.cargo];
+    const tipoTienda = m.ideal.tipoTienda ? r[m.ideal.tipoTienda] : "";
+    const cantidad = Number(r[m.ideal.cantidad]) || 0;
+    const esZafra = m.ideal.esZafra ? esZafraTrue(r[m.ideal.esZafra]) : false;
+    const fInicio = m.ideal.fechaInicio ? r[m.ideal.fechaInicio] : null;
+    const fFin = m.ideal.fechaFin ? r[m.ideal.fechaFin] : null;
+
+    const cargoDisplay = isFarmCargo(cargo) ? "Farmacéutico" : cargo;
+    const activo = !esZafra || todayInRange(fInicio, fFin);
+    const idealFinal = activo ? cantidad : 0;
+
+    const key = [region,area,tienda,cargoDisplay].map(norm).join("|");
+    if(!idealMap.has(key)){
+      idealMap.set(key, {region,area,tienda,cargoDisplay,tipoTienda,ideal:0,esZafra,activo});
+    }
+    const entry = idealMap.get(key);
+    entry.ideal += idealFinal;
+  });
+
+  // 2) Contar ocupados desde nómina real
+  const ocupadoMap = new Map();
+  rawSheets.real.forEach(r=>{
+    const region = r[m.real.region];
+    const area = r[m.real.area];
+    const tienda = r[m.real.tienda];
+    let cargo = r[m.real.cargo];
+    const cargoDisplay = isFarmCargo(cargo) ? "Farmacéutico" : cargo;
+    const key = [region,area,tienda,cargoDisplay].map(norm).join("|");
+    ocupadoMap.set(key, (ocupadoMap.get(key)||0) + 1);
+  });
+
+  // 3) Si hay archivo de farmacéuticos, sobreescribe el conteo de "Farmacéutico" por tienda
+  if(rawSheets.farm && rawSheets.farm.length && mappings.farm.tienda){
+    const farmByTienda = new Map();
+    rawSheets.farm.forEach(r=>{
+      const tienda = r[mappings.farm.tienda];
+      const adj = Number(r[mappings.farm.adjunto]) || 0;
+      const adjT = Number(r[mappings.farm.adjuntoTemp]) || 0;
+      const reg = Number(r[mappings.farm.regente]) || 0;
+      const total = adj + adjT + reg;
+      farmByTienda.set(norm(tienda), total);
+    });
+    // Sobreescribir en ocupadoMap todas las keys cuyo cargo sea "Farmacéutico"
+    for(const key of idealMap.keys()){
+      const entry = idealMap.get(key);
+      if(entry.cargoDisplay === "Farmacéutico" && farmByTienda.has(norm(entry.tienda))){
+        ocupadoMap.set(key, farmByTienda.get(norm(entry.tienda)));
+      }
+    }
+  }
+
+  // 4) Unir todo (incluye tiendas/cargos que solo aparecen en nómina real, sin ideal definido)
+  const allKeys = new Set([...idealMap.keys(), ...ocupadoMap.keys()]);
+  const rows = [];
+  allKeys.forEach(key=>{
+    const idealEntry = idealMap.get(key);
+    const ocupado = ocupadoMap.get(key) || 0;
+    const ideal = idealEntry ? idealEntry.ideal : 0;
+    const vacante = Math.max(ideal - ocupado, 0);
+    const sobregiro = Math.max(ocupado - ideal, 0);
+    const cobertura = ideal > 0 ? Math.round((ocupado/ideal)*1000)/10 : (ocupado>0 ? null : 100);
+    rows.push({
+      region: idealEntry ? idealEntry.region : key.split("|")[0],
+      area: idealEntry ? idealEntry.area : "",
+      tienda: idealEntry ? idealEntry.tienda : "",
+      tipoTienda: idealEntry ? idealEntry.tipoTienda : "",
+      cargo: idealEntry ? idealEntry.cargoDisplay : "",
+      ideal, ocupado, vacante, sobregiro, cobertura,
+      zafra: idealEntry && idealEntry.esZafra ? (idealEntry.activo ? "Activa" : "Fuera de temporada") : ""
+    });
+  });
+  return rows;
+}
+
+// ---------- Render ----------
+function fillSelect(id, values){
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  const first = sel.querySelector("option");
+  sel.innerHTML = "";
+  sel.appendChild(first);
+  [...new Set(values)].filter(Boolean).sort().forEach(v=>{
+    const opt = document.createElement("option");
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+function renderSummary(rows){
+  const totals = rows.reduce((acc,r)=>{
+    acc.ideal += r.ideal; acc.ocupado += r.ocupado;
+    acc.vacante += r.vacante; acc.sobregiro += r.sobregiro;
+    return acc;
+  }, {ideal:0,ocupado:0,vacante:0,sobregiro:0});
+  const cobertura = totals.ideal > 0 ? Math.round((totals.ocupado/totals.ideal)*1000)/10 : 0;
+
+  document.getElementById("summaryGrid").innerHTML = `
+    <div class="stat ideal"><div class="label">Ideal</div><div class="value">${totals.ideal}</div></div>
+    <div class="stat ocupadas"><div class="label">Ocupadas</div><div class="value">${totals.ocupado}</div></div>
+    <div class="stat vacantes"><div class="label">Vacantes</div><div class="value">${totals.vacante}</div></div>
+    <div class="stat sobregiro"><div class="label">Sobregiro</div><div class="value">${totals.sobregiro}</div></div>
+    <div class="stat cobertura"><div class="label">% Cobertura</div><div class="value">${cobertura}%</div></div>
+  `;
+}
+
+function applyFilters(rows){
+  const region = document.getElementById("fRegion").value;
+  const area = document.getElementById("fArea").value;
+  const tienda = document.getElementById("fTienda").value;
+  const cargo = document.getElementById("fCargo").value;
+  const tipoTienda = document.getElementById("fTipoTienda").value;
+  const search = norm(document.getElementById("fSearch").value);
+
+  return rows.filter(r=>{
+    if(region && r.region !== region) return false;
+    if(area && r.area !== area) return false;
+    if(tienda && r.tienda !== tienda) return false;
+    if(cargo && r.cargo !== cargo) return false;
+    if(tipoTienda && r.tipoTienda !== tipoTienda) return false;
+    if(search){
+      const hay = norm(`${r.tienda} ${r.cargo} ${r.area} ${r.region}`);
+      if(!hay.includes(search)) return false;
+    }
+    if(currentView === "vacantes" && r.vacante <= 0) return false;
+    if(currentView === "sobregiro" && r.sobregiro <= 0) return false;
+    return true;
+  });
+}
+
+function renderTable(rows){
+  let sorted = rows;
+  if(sortState.key){
+    sorted = [...rows].sort((a,b)=>{
+      const va = a[sortState.key], vb = b[sortState.key];
+      if(typeof va === "number") return (va-vb)*sortState.dir;
+      return String(va).localeCompare(String(vb)) * sortState.dir;
+    });
+  }
+  const body = document.getElementById("detailBody");
+  body.innerHTML = sorted.map(r=>{
+    let vacanteBadge = r.vacante>0 ? `<span class="badge vac">${r.vacante}</span>` : r.vacante;
+    let sobreBadge = r.sobregiro>0 ? `<span class="badge sob">${r.sobregiro}</span>` : r.sobregiro;
+    let cobText = r.cobertura===null ? "—" : `${r.cobertura}%`;
+    return `<tr>
+      <td>${r.region||""}</td><td>${r.area||""}</td><td>${r.tienda||""}</td>
+      <td>${r.tipoTienda||""}</td><td>${r.cargo||""}</td>
+      <td>${r.ideal}</td><td>${r.ocupado}</td>
+      <td>${vacanteBadge}</td><td>${sobreBadge}</td>
+      <td>${cobText}</td><td>${r.zafra||""}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("rowCount").textContent = `${sorted.length} filas mostradas de ${computedRows.length} totales`;
+}
+
+function refreshView(){
+  const filtered = applyFilters(computedRows);
+  renderSummary(filtered);
+  renderTable(filtered);
+}
+
+["fRegion","fArea","fTienda","fCargo","fTipoTienda"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", refreshView);
+});
+document.getElementById("fSearch").addEventListener("input", refreshView);
+
+document.querySelectorAll(".pill").forEach(p=>{
+  p.addEventListener("click", ()=>{
+    document.querySelectorAll(".pill").forEach(x=>x.classList.remove("active"));
+    p.classList.add("active");
+    currentView = p.dataset.view;
+    refreshView();
+  });
+});
+
+document.querySelectorAll("thead th").forEach(th=>{
+  th.addEventListener("click", ()=>{
+    const k = th.dataset.k;
+    if(sortState.key === k) sortState.dir *= -1;
+    else { sortState.key = k; sortState.dir = 1; }
+    refreshView();
+  });
+});
+
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      computedRows, savedAt: new Date().toISOString()
+    }));
+  }catch(e){ /* almacenamiento no disponible, seguimos sin persistir */ }
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    computedRows = data.computedRows || [];
+    if(computedRows.length){
+      document.getElementById("lastUpdated").textContent = `Últimos datos guardados: ${new Date(data.savedAt).toLocaleString()}`;
+      showResults();
+      return true;
+    }
+  }catch(e){ /* nada guardado o corrupto */ }
+  return false;
+}
+
+function showResults(){
+  document.getElementById("emptyState").hidden = true;
+  document.getElementById("resultsArea").hidden = false;
+  fillSelect("fRegion", computedRows.map(r=>r.region));
+  fillSelect("fArea", computedRows.map(r=>r.area));
+  fillSelect("fTienda", computedRows.map(r=>r.tienda));
+  fillSelect("fCargo", computedRows.map(r=>r.cargo));
+  fillSelect("fTipoTienda", computedRows.map(r=>r.tipoTienda));
+  refreshView();
+}
+
+document.getElementById("btnProcess").addEventListener("click", ()=>{
+  computedRows = compute();
+  document.getElementById("lastUpdated").textContent = `Procesado: ${new Date().toLocaleString()}`;
+  saveState();
+  showResults();
+});
+
+document.getElementById("btnClear").addEventListener("click", ()=>{
+  localStorage.removeItem(STORAGE_KEY);
+  computedRows = [];
+  document.getElementById("resultsArea").hidden = true;
+  document.getElementById("emptyState").hidden = false;
+  document.getElementById("lastUpdated").textContent = "";
+});
+
+// Al cargar la página, intenta recuperar el último cálculo guardado
+loadState();
+</script>
+</body>
+</html>
